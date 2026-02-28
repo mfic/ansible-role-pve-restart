@@ -16,9 +16,10 @@
   ansible.builtin.set_fact:
     _pve_node_name: "{{ _pve_node_name_result.stdout | trim }}"
 
-- name: Discover — verify node exists in cluster
+- name: Discover — verify node exists in PVE cluster
   ansible.builtin.shell: |
-    pvecm nodes | awk '$1 ~ /^[0-9]+$/ {print $NF}'
-  register: _pvecm_node_list
+    pvesh get /nodes --output-format json |
+      python3 -c "import sys,json;[print(n['node']) for n in json.load(sys.stdin)]"
+  register: _pve_node_list
   changed_when: false
-  failed_when: _pve_node_name not in _pvecm_node_list.stdout_lines
+  failed_when: _pve_node_name not in _pve_node_list.stdout_lines

@@ -11,12 +11,13 @@
   retries: 20
   delay: 15
 
-- name: Verify — check all cluster nodes are online
+- name: Verify — check all PVE nodes are online
   ansible.builtin.shell: |
-    pvecm nodes | awk '$1 ~ /^[0-9]+$/ {print $NF}'
-  register: _pvecm_verify_nodes
+    pvesh get /nodes --output-format json |
+      python3 -c "import sys,json;[print(n['node']) for n in json.load(sys.stdin) if n.get('status')!='online']"
+  register: _pve_verify_offline
   changed_when: false
-  until: _pvecm_verify_nodes.stdout_lines | length == groups[pve_restart_cluster_group] | length
+  until: _pve_verify_offline.stdout | trim | length == 0
   retries: 20
   delay: 15
 

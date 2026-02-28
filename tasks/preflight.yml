@@ -21,18 +21,29 @@
   run_once: true
   failed_when: _pvecm_status.stdout is not search('Quorate:\s+Yes')
 
-- name: Preflight — check all cluster nodes are online
+- name: Preflight — get PVE node list
   ansible.builtin.shell: |
-    pvecm nodes | awk '$1 ~ /^[0-9]+$/ {print $NF}'
-  register: _pvecm_nodes
+    pvesh get /nodes --output-format json |
+      python3 -c "import sys,json;[print(n['node']) for n in json.load(sys.stdin)]"
+  register: _pve_nodes
   changed_when: false
   run_once: true
 
 - name: Preflight — verify expected node count
   ansible.builtin.assert:
     that:
-      - _pvecm_nodes.stdout_lines | length == groups[pve_restart_cluster_group] | length
+      - _pve_nodes.stdout_lines | length == groups[pve_restart_cluster_group] | length
     fail_msg: >-
-      Expected {{ groups[pve_restart_cluster_group] | length }} cluster nodes
-      but pvecm reports {{ _pvecm_nodes.stdout_lines | length }}
+      Expected {{ groups[pve_restart_cluster_group] | length }} PVE nodes
+      but pvesh reports {{ _pve_nodes.stdout_lines | length }}:
+      {{ _pve_nodes.stdout_lines | join(', ') }}
   run_once: true
+
+- name: Preflight — check all nodes are online
+  ansible.builtin.shell: |
+    pvesh get /nodes --output-format json |
+      python3 -c "import sys,json;[print(n['node']) for n in json.load(sys.stdin) if n.get('status')!='online']"
+  register: _pve_offline_nodes
+  changed_when: false
+  run_once: true
+  failed_when: _pve_offline_nodes.stdout | trim | length > 0
