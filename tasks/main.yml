@@ -1,0 +1,38 @@
+---
+# tasks/main.yml — role entry point
+#
+# Rolling OS reboot order (per play):
+#   1. preflight checks (run_once per play)
+#   2. discover PVE node name
+#   3. evacuate node (HA maintenance + migrate non-HA + Ceph noout)
+#   4. reboot + wait for PVE services
+#   5. restore node (Ceph noout unset + HA maintenance disable)
+#   6. verify cluster health
+#
+# Expected play setup:
+#   serial: 1
+#
+# Note: become_flags '-i' is required so that sudo creates a login shell,
+# giving PVE CLI tools (pvecm, ha-manager, qm, pct) access to the
+# pve-cluster IPC socket.
+
+- block:
+    - name: Preflight — verify cluster health before touching this node
+      ansible.builtin.include_tasks: preflight.yml
+
+    - name: Discover PVE node name for this host
+      ansible.builtin.include_tasks: discover_node_name.yml
+
+    - name: Evacuate workloads from this node
+      ansible.builtin.include_tasks: evacuate_node.yml
+
+    - name: Reboot this node and wait for PVE services
+      ansible.builtin.include_tasks: reboot_node.yml
+
+    - name: Restore node to active cluster duty
+      ansible.builtin.include_tasks: restore_node.yml
+
+    - name: Verify cluster health after reboot
+      ansible.builtin.include_tasks: verify_cluster.yml
+  become: true
+  become_flags: '-i'

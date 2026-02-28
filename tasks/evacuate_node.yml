@@ -1,0 +1,142 @@
+---
+# tasks/evacuate_node.yml
+# Evacuates all workloads off the current node before reboot.
+# Three phases: HA maintenance mode, non-HA workload migration, Ceph noout.
+
+# --- HA maintenance mode ---
+
+- name: Evacuate — enable HA maintenance mode
+  ansible.builtin.command: ha-manager crm-command node-maintenance enable
+  changed_when: true
+  when: pve_restart_ha_maintenance_enabled | bool
+
+- name: Evacuate — wait for HA resources to leave this node
+  ansible.builtin.shell: |
+    ha-manager status | awk -v node="{{ _pve_node_name }}" '$0 ~ node && /started/ {print}'
+  register: _pve_ha_on_node
+  changed_when: false
+  until: _pve_ha_on_node.stdout | trim | length == 0
+  retries: "{{ pve_restart_ha_maintenance_poll_retries }}"
+  delay: "{{ pve_restart_ha_maintenance_poll_delay }}"
+  when: pve_restart_ha_maintenance_enabled | bool
+
+# --- Non-HA VMs ---
+
+- name: Evacuate — list running VMs on this node
+  ansible.builtin.shell: |
+    qm list | awk 'NR>1 && $3 == "running" {print $1}'
+  register: _pve_running_vms
+  changed_when: false
+
+- name: Evacuate — list HA-managed VM IDs
+  ansible.builtin.shell: |
+    ha-manager status | awk -F'[: ]' '/^vm:/ {print $2}'
+  register: _pve_ha_vm_ids
+  changed_when: false
+  when: pve_restart_ha_maintenance_enabled | bool
+
+- name: Evacuate — default HA VM list when HA is disabled
+  ansible.builtin.set_fact:
+    _pve_ha_vm_ids:
+      stdout_lines: []
+  when: not (pve_restart_ha_maintenance_enabled | bool)
+
+- name: Evacuate — determine non-HA running VMs
+  ansible.builtin.set_fact:
+    _pve_non_ha_vms: >-
+      {{ _pve_running_vms.stdout_lines | default([])
+         | difference(_pve_ha_vm_ids.stdout_lines | default([])) }}
+
+- name: Evacuate — set migration target node
+  ansible.builtin.set_fact:
+    _pve_migration_target: >-
+      {{ groups[pve_restart_cluster_group]
+         | difference([inventory_hostname]) | first }}
+  when: (_pve_non_ha_vms | length > 0) or (_pve_running_cts | default([]) | length > 0)
+
+- name: Evacuate — live-migrate non-HA VMs
+  ansible.builtin.command: >
+    qm migrate {{ item }} {{ _pve_migration_target }} --online
+  loop: "{{ _pve_non_ha_vms }}"
+  when:
+    - pve_restart_migrate_non_ha | bool
+    - _pve_non_ha_vms | length > 0
+  changed_when: true
+
+# --- Non-HA CTs ---
+
+- name: Evacuate — list running CTs on this node
+  ansible.builtin.shell: |
+    pct list | awk 'NR>1 && $2 == "running" {print $1}'
+  register: _pve_running_cts
+  changed_when: false
+
+- name: Evacuate — list HA-managed CT IDs
+  ansible.builtin.shell: |
+    ha-manager status | awk -F'[: ]' '/^ct:/ {print $2}'
+  register: _pve_ha_ct_ids
+  changed_when: false
+  when: pve_restart_ha_maintenance_enabled | bool
+
+- name: Evacuate — default HA CT list when HA is disabled
+  ansible.builtin.set_fact:
+    _pve_ha_ct_ids:
+      stdout_lines: []
+  when: not (pve_restart_ha_maintenance_enabled | bool)
+
+- name: Evacuate — determine non-HA running CTs
+  ansible.builtin.set_fact:
+    _pve_non_ha_cts: >-
+      {{ _pve_running_cts.stdout_lines | default([])
+         | difference(_pve_ha_ct_ids.stdout_lines | default([])) }}
+
+- name: Evacuate — set migration target for CTs
+  ansible.builtin.set_fact:
+    _pve_migration_target: >-
+      {{ groups[pve_restart_cluster_group]
+         | difference([inventory_hostname]) | first }}
+  when:
+    - _pve_migration_target is not defined
+    - _pve_non_ha_cts | length > 0
+
+- name: Evacuate — migrate non-HA CTs
+  ansible.builtin.command: >
+    pct migrate {{ item }} {{ _pve_migration_target }}
+    --restart --timeout {{ pve_restart_migration_timeout }}
+  loop: "{{ _pve_non_ha_cts }}"
+  when:
+    - pve_restart_migrate_non_ha | bool
+    - _pve_non_ha_cts | length > 0
+  changed_when: true
+
+# --- Ceph ---
+
+- name: Evacuate — set Ceph OSD noout for this node
+  ansible.builtin.command: ceph osd set-group noout {{ _pve_node_name }}
+  changed_when: true
+  when: pve_restart_ceph_enabled | bool
+
+- name: Evacuate — pause for Ceph noout to settle
+  ansible.builtin.pause:
+    seconds: "{{ pve_restart_ceph_noout_settle_delay }}"
+  when: pve_restart_ceph_enabled | bool
+
+# --- Final check ---
+
+- name: Evacuate — verify no VMs remain running on this node
+  ansible.builtin.shell: |
+    qm list | awk 'NR>1 && $3 == "running" {print $1}'
+  register: _pve_remaining_vms
+  changed_when: false
+  until: _pve_remaining_vms.stdout | trim | length == 0
+  retries: 20
+  delay: 15
+
+- name: Evacuate — verify no CTs remain running on this node
+  ansible.builtin.shell: |
+    pct list | awk 'NR>1 && $2 == "running" {print $1}'
+  register: _pve_remaining_cts
+  changed_when: false
+  until: _pve_remaining_cts.stdout | trim | length == 0
+  retries: 20
+  delay: 15

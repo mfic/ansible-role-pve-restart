@@ -1,0 +1,24 @@
+---
+# tasks/discover_node_name.yml
+# Resolves the PVE node name for the current Ansible host.
+# PVE uses the short hostname as the node name (registered during
+# cluster join), which may differ from the Ansible inventory_hostname.
+#
+# Result is stored in: _pve_node_name
+
+- name: Discover — get PVE node name from hostname
+  ansible.builtin.command: hostname -s
+  register: _pve_node_name_result
+  changed_when: false
+  failed_when: _pve_node_name_result.stdout | trim | length == 0
+
+- name: Discover — set PVE node name fact
+  ansible.builtin.set_fact:
+    _pve_node_name: "{{ _pve_node_name_result.stdout | trim }}"
+
+- name: Discover — verify node exists in cluster
+  ansible.builtin.shell: |
+    pvecm nodes | awk '$1 ~ /^[0-9]+$/ {print $NF}'
+  register: _pvecm_node_list
+  changed_when: false
+  failed_when: _pve_node_name not in _pvecm_node_list.stdout_lines

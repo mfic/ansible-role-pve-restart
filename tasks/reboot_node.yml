@@ -1,0 +1,47 @@
+---
+# tasks/reboot_node.yml
+# Performs a full OS reboot and waits for PVE services to come back.
+# This file is also reused by mfic.pve-update via include_role.
+
+- name: Reboot — perform OS reboot
+  ansible.builtin.reboot:
+    msg: "{{ pve_restart_reboot_msg }}"
+    pre_reboot_delay: "{{ pve_restart_pre_reboot_delay }}"
+    post_reboot_delay: "{{ pve_restart_post_reboot_delay }}"
+    reboot_timeout: "{{ pve_restart_reboot_timeout }}"
+    test_command: uptime
+
+- name: Reboot — wait for pve-cluster service
+  ansible.builtin.systemd:
+    name: pve-cluster
+    state: started
+  register: _pve_cluster_svc
+  until: _pve_cluster_svc is not failed
+  retries: "{{ pve_restart_service_ready_retries }}"
+  delay: "{{ pve_restart_service_ready_delay }}"
+
+- name: Reboot — wait for pvedaemon service
+  ansible.builtin.systemd:
+    name: pvedaemon
+    state: started
+  register: _pvedaemon_svc
+  until: _pvedaemon_svc is not failed
+  retries: "{{ pve_restart_service_ready_retries }}"
+  delay: "{{ pve_restart_service_ready_delay }}"
+
+- name: Reboot — wait for pveproxy service
+  ansible.builtin.systemd:
+    name: pveproxy
+    state: started
+  register: _pveproxy_svc
+  until: _pveproxy_svc is not failed
+  retries: "{{ pve_restart_service_ready_retries }}"
+  delay: "{{ pve_restart_service_ready_delay }}"
+
+- name: Reboot — verify node is quorate after reboot
+  ansible.builtin.command: pvecm status
+  register: _pvecm_post_reboot
+  changed_when: false
+  until: _pvecm_post_reboot.stdout is search('Quorate:\s+Yes')
+  retries: "{{ pve_restart_service_ready_retries }}"
+  delay: "{{ pve_restart_service_ready_delay }}"

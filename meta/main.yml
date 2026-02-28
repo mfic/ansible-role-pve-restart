@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  role_name: pve-restart
+  author: mfic
+  description: Rolling OS reboot of all nodes in a Proxmox VE cluster with HA and Ceph awareness
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+
+dependencies: []

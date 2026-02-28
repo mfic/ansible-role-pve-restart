@@ -1,0 +1,30 @@
+---
+# tasks/verify_cluster.yml
+# Post-reboot health check. Validates the cluster is operational
+# after this node has been rebooted and restored.
+
+- name: Verify — check cluster quorum
+  ansible.builtin.command: pvecm status
+  register: _pvecm_verify
+  changed_when: false
+  until: _pvecm_verify.stdout is search('Quorate:\s+Yes')
+  retries: 20
+  delay: 15
+
+- name: Verify — check all cluster nodes are online
+  ansible.builtin.shell: |
+    pvecm nodes | awk '$1 ~ /^[0-9]+$/ {print $NF}'
+  register: _pvecm_verify_nodes
+  changed_when: false
+  until: _pvecm_verify_nodes.stdout_lines | length == groups[pve_restart_cluster_group] | length
+  retries: 20
+  delay: 15
+
+- name: Verify — check Ceph health
+  ansible.builtin.command: ceph health
+  register: _ceph_health
+  changed_when: false
+  until: _ceph_health.stdout is search('HEALTH_OK|HEALTH_WARN')
+  retries: 40
+  delay: 15
+  when: pve_restart_ceph_enabled | bool

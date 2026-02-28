@@ -1,0 +1,38 @@
+---
+# tasks/preflight.yml
+# Runs once per play. Validates the PVE cluster is healthy before
+# touching any node.
+
+- name: Preflight — log PVE version
+  ansible.builtin.command: pveversion
+  register: _pve_version
+  changed_when: false
+  run_once: true
+
+- name: Preflight — show PVE version
+  ansible.builtin.debug:
+    msg: "{{ _pve_version.stdout }}"
+  run_once: true
+
+- name: Preflight — check cluster quorum
+  ansible.builtin.command: pvecm status
+  register: _pvecm_status
+  changed_when: false
+  run_once: true
+  failed_when: _pvecm_status.stdout is not search('Quorate:\s+Yes')
+
+- name: Preflight — check all cluster nodes are online
+  ansible.builtin.shell: |
+    pvecm nodes | awk '$1 ~ /^[0-9]+$/ {print $NF}'
+  register: _pvecm_nodes
+  changed_when: false
+  run_once: true
+
+- name: Preflight — verify expected node count
+  ansible.builtin.assert:
+    that:
+      - _pvecm_nodes.stdout_lines | length == groups[pve_restart_cluster_group] | length
+    fail_msg: >-
+      Expected {{ groups[pve_restart_cluster_group] | length }} cluster nodes
+      but pvecm reports {{ _pvecm_nodes.stdout_lines | length }}
+  run_once: true

@@ -1,0 +1,71 @@
+---
+# defaults/main.yml — mfic.pve-restart
+# Rolling OS reboot of all nodes in a Proxmox VE cluster,
+# one node at a time, keeping the cluster operational throughout.
+
+# ---------------------------------------------------------------------------
+# Cluster group (must match your inventory)
+# ---------------------------------------------------------------------------
+
+# Ansible inventory group containing all PVE cluster nodes.
+pve_restart_cluster_group: "pve_cluster"
+
+# ---------------------------------------------------------------------------
+# HA maintenance mode
+# ---------------------------------------------------------------------------
+
+# Enable HA maintenance mode before reboot (PVE 7.3+).
+# Auto-migrates all HA-managed VMs/CTs off the node.
+pve_restart_ha_maintenance_enabled: true
+
+# Seconds between polls while waiting for HA migration to finish.
+pve_restart_ha_maintenance_poll_delay: 15
+
+# Maximum number of polls before giving up on HA migration.
+pve_restart_ha_maintenance_poll_retries: 40
+
+# ---------------------------------------------------------------------------
+# Non-HA workload migration
+# ---------------------------------------------------------------------------
+
+# Migrate non-HA VMs and containers off the node before reboot.
+pve_restart_migrate_non_ha: true
+
+# Timeout in seconds for each individual VM/CT migration.
+pve_restart_migration_timeout: 600
+
+# ---------------------------------------------------------------------------
+# Reboot behaviour
+# ---------------------------------------------------------------------------
+
+# Seconds to wait before initiating reboot.
+pve_restart_pre_reboot_delay: 5
+
+# Seconds to wait after reboot before starting checks.
+pve_restart_post_reboot_delay: 30
+
+# Maximum seconds to wait for the machine to reboot and become reachable.
+pve_restart_reboot_timeout: 600
+
+# Message sent to logged-in users before reboot.
+pve_restart_reboot_msg: "Ansible pve-restart: rebooting node for cluster maintenance"
+
+# ---------------------------------------------------------------------------
+# PVE service readiness
+# ---------------------------------------------------------------------------
+
+# Seconds between PVE service readiness polls after reboot.
+pve_restart_service_ready_delay: 10
+
+# Maximum polling attempts for PVE services to become active.
+pve_restart_service_ready_retries: 30
+
+# ---------------------------------------------------------------------------
+# Ceph integration
+# ---------------------------------------------------------------------------
+
+# Set to true to manage Ceph OSD noout flags around reboot.
+pve_restart_ceph_enabled: false
+
+# Seconds to pause after setting Ceph noout before proceeding with reboot.
+pve_restart_ceph_noout_settle_delay: 5

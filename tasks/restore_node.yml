@@ -1,0 +1,24 @@
+---
+# tasks/restore_node.yml
+# Re-enables the node for HA scheduling and Ceph after reboot.
+# VMs/CTs are NOT migrated back — the HA manager decides placement.
+
+- name: Restore — unset Ceph OSD noout for this node
+  ansible.builtin.command: ceph osd unset-group noout {{ _pve_node_name }}
+  changed_when: true
+  when: pve_restart_ceph_enabled | bool
+
+- name: Restore — disable HA maintenance mode
+  ansible.builtin.command: ha-manager crm-command node-maintenance disable
+  changed_when: true
+  when: pve_restart_ha_maintenance_enabled | bool
+
+- name: Restore — wait for node to rejoin HA cluster
+  ansible.builtin.shell: |
+    ha-manager status | head -1
+  register: _pve_ha_status
+  changed_when: false
+  until: _pve_ha_status.stdout is search('active')
+  retries: "{{ pve_restart_ha_maintenance_poll_retries }}"
+  delay: "{{ pve_restart_ha_maintenance_poll_delay }}"
+  when: pve_restart_ha_maintenance_enabled | bool
