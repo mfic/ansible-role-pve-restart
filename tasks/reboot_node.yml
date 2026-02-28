@@ -12,29 +12,26 @@
     test_command: uptime
 
 - name: Reboot — wait for pve-cluster service
-  ansible.builtin.systemd:
-    name: pve-cluster
-    state: started
+  ansible.builtin.command: systemctl is-active pve-cluster
   register: _pve_cluster_svc
-  until: _pve_cluster_svc is not failed
+  changed_when: false
+  until: _pve_cluster_svc.rc == 0
   retries: "{{ pve_restart_service_ready_retries }}"
   delay: "{{ pve_restart_service_ready_delay }}"
 
 - name: Reboot — wait for pvedaemon service
-  ansible.builtin.systemd:
-    name: pvedaemon
-    state: started
+  ansible.builtin.command: systemctl is-active pvedaemon
   register: _pvedaemon_svc
-  until: _pvedaemon_svc is not failed
+  changed_when: false
+  until: _pvedaemon_svc.rc == 0
   retries: "{{ pve_restart_service_ready_retries }}"
   delay: "{{ pve_restart_service_ready_delay }}"
 
 - name: Reboot — wait for pveproxy service
-  ansible.builtin.systemd:
-    name: pveproxy
-    state: started
+  ansible.builtin.command: systemctl is-active pveproxy
   register: _pveproxy_svc
-  until: _pveproxy_svc is not failed
+  changed_when: false
+  until: _pveproxy_svc.rc == 0
   retries: "{{ pve_restart_service_ready_retries }}"
   delay: "{{ pve_restart_service_ready_delay }}"
 
