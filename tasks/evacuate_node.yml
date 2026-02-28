@@ -6,7 +6,7 @@
 # --- HA maintenance mode ---
 
 - name: Evacuate — enable HA maintenance mode
-  ansible.builtin.command: ha-manager crm-command node-maintenance enable
+  ansible.builtin.command: ha-manager crm-command node-maintenance enable {{ _pve_node_name }}
   changed_when: true
   when: pve_restart_ha_maintenance_enabled | bool
 
@@ -19,6 +19,45 @@
   retries: "{{ pve_restart_ha_maintenance_poll_retries }}"
   delay: "{{ pve_restart_ha_maintenance_poll_delay }}"
   when: pve_restart_ha_maintenance_enabled | bool
+  ignore_errors: true
+
+# --- Shut down pinned HA VMs/CTs that could not migrate ---
+
+- name: Evacuate — find HA VMs still running on this node
+  ansible.builtin.shell: |
+    ha-manager status | awk -v node="{{ _pve_node_name }}" '/^service vm:/ && $0 ~ node && /started/ {split($2, a, ":"); print a[2]}'
+  register: _pve_pinned_ha_vms
+  changed_when: false
+  when:
+    - pve_restart_ha_maintenance_enabled | bool
+    - _pve_ha_on_node.stdout | default('') | trim | length > 0
+
+- name: Evacuate — shut down pinned HA VMs
+  ansible.builtin.command: >
+    qm shutdown {{ item }} --forceStop 1 --timeout {{ pve_restart_shutdown_timeout }}
+  loop: "{{ _pve_pinned_ha_vms.stdout_lines | default([]) }}"
+  when:
+    - pve_restart_ha_maintenance_enabled | bool
+    - _pve_pinned_ha_vms.stdout_lines | default([]) | length > 0
+  changed_when: true
+
+- name: Evacuate — find HA CTs still running on this node
+  ansible.builtin.shell: |
+    ha-manager status | awk -v node="{{ _pve_node_name }}" '/^service ct:/ && $0 ~ node && /started/ {split($2, a, ":"); print a[2]}'
+  register: _pve_pinned_ha_cts
+  changed_when: false
+  when:
+    - pve_restart_ha_maintenance_enabled | bool
+    - _pve_ha_on_node.stdout | default('') | trim | length > 0
+
+- name: Evacuate — shut down pinned HA CTs
+  ansible.builtin.command: >
+    pct shutdown {{ item }} --timeout {{ pve_restart_shutdown_timeout }}
+  loop: "{{ _pve_pinned_ha_cts.stdout_lines | default([]) }}"
+  when:
+    - pve_restart_ha_maintenance_enabled | bool
+    - _pve_pinned_ha_cts.stdout_lines | default([]) | length > 0
+  changed_when: true
 
 # --- Non-HA VMs ---
 
@@ -30,7 +69,7 @@
 
 - name: Evacuate — list HA-managed VM IDs
   ansible.builtin.shell: |
-    ha-manager status | awk -F'[: ]' '/^vm:/ {print $2}'
+    ha-manager status | awk -F'[: ]' '/^service vm:/ {print $3}'
   register: _pve_ha_vm_ids
   changed_when: false
   when: pve_restart_ha_maintenance_enabled | bool
@@ -62,6 +101,19 @@
     - pve_restart_migrate_non_ha | bool
     - _pve_non_ha_vms | length > 0
   changed_when: true
+  register: _pve_vm_migrate_results
+  ignore_errors: true
+
+- name: Evacuate — shut down VMs that failed to migrate
+  ansible.builtin.command: >
+    qm shutdown {{ item.item }} --forceStop 1 --timeout {{ pve_restart_shutdown_timeout }}
+  loop: "{{ _pve_vm_migrate_results.results | default([]) }}"
+  when:
+    - _pve_vm_migrate_results.results is defined
+    - item.failed | default(false)
+  loop_control:
+    label: "{{ item.item | default('n/a') }}"
+  changed_when: true
 
 # --- Non-HA CTs ---
 
@@ -73,7 +125,7 @@
 
 - name: Evacuate — list HA-managed CT IDs
   ansible.builtin.shell: |
-    ha-manager status | awk -F'[: ]' '/^ct:/ {print $2}'
+    ha-manager status | awk -F'[: ]' '/^service ct:/ {print $3}'
   register: _pve_ha_ct_ids
   changed_when: false
   when: pve_restart_ha_maintenance_enabled | bool
@@ -107,6 +159,19 @@
   when:
     - pve_restart_migrate_non_ha | bool
     - _pve_non_ha_cts | length > 0
+  changed_when: true
+  register: _pve_ct_migrate_results
+  ignore_errors: true
+
+- name: Evacuate — shut down CTs that failed to migrate
+  ansible.builtin.command: >
+    pct shutdown {{ item.item }} --timeout {{ pve_restart_shutdown_timeout }}
+  loop: "{{ _pve_ct_migrate_results.results | default([]) }}"
+  when:
+    - _pve_ct_migrate_results.results is defined
+    - item.failed | default(false)
+  loop_control:
+    label: "{{ item.item | default('n/a') }}"
   changed_when: true
 
 # --- Ceph ---

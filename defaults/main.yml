@@ -22,7 +22,9 @@ pve_restart_ha_maintenance_enabled: true
 pve_restart_ha_maintenance_poll_delay: 15
 
 # Maximum number of polls before giving up on HA migration.
-pve_restart_ha_maintenance_poll_retries: 40
+# Pinned VMs (restricted HA groups) that cannot migrate are
+# gracefully shut down after this wait expires.
+pve_restart_ha_maintenance_poll_retries: 10
 
 # ---------------------------------------------------------------------------
 # Non-HA workload migration
@@ -33,6 +35,10 @@ pve_restart_migrate_non_ha: true
 
 # Timeout in seconds for each individual VM/CT migration.
 pve_restart_migration_timeout: 600
+
+# Timeout in seconds for graceful shutdown of pinned HA VMs/CTs
+# that cannot migrate (restricted HA group). Uses --forceStop as fallback.
+pve_restart_shutdown_timeout: 120
 
 # ---------------------------------------------------------------------------
 # Reboot behaviour
