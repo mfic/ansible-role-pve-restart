@@ -61,7 +61,7 @@ pve_restart_reboot_msg: "Ansible pve-restart: rebooting node for cluster mainten
 # ---------------------------------------------------------------------------
 
 # Seconds between PVE service readiness polls after reboot.
-pve_restart_service_ready_delay: 10
+pve_restart_service_ready_delay: 5
 
 # Maximum polling attempts for PVE services to become active.
 pve_restart_service_ready_retries: 30
