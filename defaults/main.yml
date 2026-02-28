@@ -48,7 +48,7 @@ pve_restart_shutdown_timeout: 120
 pve_restart_pre_reboot_delay: 5
 
 # Seconds to wait after reboot before starting checks.
-pve_restart_post_reboot_delay: 30
+pve_restart_post_reboot_delay: 5
 
 # Maximum seconds to wait for the machine to reboot and become reachable.
 pve_restart_reboot_timeout: 600

@@ -11,31 +11,7 @@
     reboot_timeout: "{{ pve_restart_reboot_timeout }}"
     test_command: uptime
 
-- name: Reboot — wait for pve-cluster service
-  ansible.builtin.command: systemctl is-active pve-cluster
-  register: _pve_cluster_svc
-  changed_when: false
-  until: _pve_cluster_svc.rc == 0
-  retries: "{{ pve_restart_service_ready_retries }}"
-  delay: "{{ pve_restart_service_ready_delay }}"
-
-- name: Reboot — wait for pvedaemon service
-  ansible.builtin.command: systemctl is-active pvedaemon
-  register: _pvedaemon_svc
-  changed_when: false
-  until: _pvedaemon_svc.rc == 0
-  retries: "{{ pve_restart_service_ready_retries }}"
-  delay: "{{ pve_restart_service_ready_delay }}"
-
-- name: Reboot — wait for pveproxy service
-  ansible.builtin.command: systemctl is-active pveproxy
-  register: _pveproxy_svc
-  changed_when: false
-  until: _pveproxy_svc.rc == 0
-  retries: "{{ pve_restart_service_ready_retries }}"
-  delay: "{{ pve_restart_service_ready_delay }}"
-
-- name: Reboot — verify node is quorate after reboot
+- name: Reboot — wait for PVE services and quorum
   ansible.builtin.command: pvecm status
   register: _pvecm_post_reboot
   changed_when: false
