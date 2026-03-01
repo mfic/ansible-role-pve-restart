@@ -17,22 +17,7 @@
 # pve-cluster IPC socket.
 
 - block:
-    - name: Preflight — verify cluster health before touching this node
-      ansible.builtin.include_tasks: preflight.yml
-
-    - name: Discover PVE node name for this host
-      ansible.builtin.include_tasks: discover_node_name.yml
-
-    - name: Evacuate workloads from this node
-      ansible.builtin.include_tasks: evacuate_node.yml
-
-    - name: Reboot this node and wait for PVE services
-      ansible.builtin.include_tasks: reboot_node.yml
-
-    - name: Restore node to active cluster duty
-      ansible.builtin.include_tasks: restore_node.yml
-
-    - name: Verify cluster health after reboot
-      ansible.builtin.include_tasks: verify_cluster.yml
+    - name: Run node lifecycle with retry support
+      ansible.builtin.include_tasks: node_lifecycle.yml
   become: true
   become_flags: '-i'

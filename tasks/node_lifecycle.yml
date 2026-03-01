@@ -1,0 +1,35 @@
+---
+# tasks/node_lifecycle.yml
+# Wraps the full node lifecycle in block/rescue so the operator can
+# retry a failed node instead of aborting the entire rolling run.
+
+- block:
+    - name: Preflight — verify cluster health before touching this node
+      ansible.builtin.include_tasks: preflight.yml
+
+    - name: Discover PVE node name for this host
+      ansible.builtin.include_tasks: discover_node_name.yml
+
+    - name: Evacuate workloads from this node
+      ansible.builtin.include_tasks: evacuate_node.yml
+
+    - name: Reboot this node and wait for PVE services
+      ansible.builtin.include_tasks: reboot_node.yml
+
+    - name: Restore node to active cluster duty
+      ansible.builtin.include_tasks: restore_node.yml
+
+    - name: Verify cluster health after reboot
+      ansible.builtin.include_tasks: verify_cluster.yml
+
+  rescue:
+    - name: "Node {{ inventory_hostname }} — processing failed"
+      ansible.builtin.debug:
+        msg: "An error occurred while processing {{ inventory_hostname }}. Review the error above."
+
+    - name: "Node {{ inventory_hostname }} — prompt operator"
+      ansible.builtin.pause:
+        prompt: "Press ENTER to retry this node or Ctrl+C then A to abort the playbook"
+
+    - name: "Node {{ inventory_hostname }} — retrying"
+      ansible.builtin.include_tasks: node_lifecycle.yml
