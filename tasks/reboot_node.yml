@@ -11,10 +11,14 @@
     reboot_timeout: "{{ pve_restart_reboot_timeout }}"
     test_command: uptime
 
+- name: Reboot — reset SSH connection after reboot
+  ansible.builtin.meta: reset_connection
+
 - name: Reboot — wait for PVE services and quorum
-  ansible.builtin.command: pvecm status
+  ansible.builtin.shell: |
+    systemctl is-active --quiet pve-cluster && timeout 10 pvecm status
   register: _pvecm_post_reboot
   changed_when: false
-  until: _pvecm_post_reboot.stdout is search('Quorate:\s+Yes')
+  until: _pvecm_post_reboot.rc == 0 and _pvecm_post_reboot.stdout is search('Quorate:\s+Yes')
   retries: "{{ pve_restart_service_ready_retries }}"
   delay: "{{ pve_restart_service_ready_delay }}"
